@@ -2,6 +2,8 @@
  * Manager class for exporting and importing database records to/from files using the File System Access API.
  */
 
+import { Crypto as crypto } from './Crypto.js';
+
 class FileSystemManager {
   constructor(model, options = {}) {
     this.model = model;
@@ -39,13 +41,14 @@ class FileSystemManager {
   }
 
   // Método fallback para exportación cuando no hay soporte nativo
-  _fallbackExport(allData) {    
-    const jsonData = JSON.stringify({
+  async _fallbackExport(allData) {    
+    const jsonData = await crypto.encrypt({
       modelName: this.model.name,
       timestamp: new Date().toISOString(),
       data: allData
-    }, null, 2);
-    const blob = new Blob([jsonData], {type: 'application/json'});
+    });
+
+    const blob = new Blob([JSON.stringify(jsonData)], {type: 'application/json'});
     const url = URL.createObjectURL(blob);
     
     const link = document.createElement('a');
@@ -70,7 +73,7 @@ class FileSystemManager {
       const allData = await this.model.find();
       // Si no hay soporte nativo, usar método fallback
       if (!FileSystemManager.isSupported()) {
-        return this._fallbackExport(allData);
+        return await this._fallbackExport(allData);
       }
 
       // Configurar opciones para guardar archivo
@@ -91,9 +94,9 @@ class FileSystemManager {
         timestamp: new Date().toISOString(),
         data: allData
       };
-
+      const encryptedData = await crypto.encrypt(exportData);
       // Escribir datos
-      await writable.write(JSON.stringify(exportData, null, 2));
+      await writable.write(JSON.stringify(encryptedData));
       await writable.close();
 
       return {
@@ -109,7 +112,7 @@ class FileSystemManager {
       if (!FileSystemManager.isSupported()) {
         try {
           const allData = await this.model.find();          
-          return this._fallbackExport(allData);
+          return await this._fallbackExport(allData);
         } catch (fallbackError) {
           console.error('Error en fallback de exportación:', fallbackError);
         }
@@ -134,13 +137,14 @@ class FileSystemManager {
         try {
           const file = event.target.files[0];
           const fileContent = await file.text();
-          const importData = JSON.parse(fileContent);
+          //const importData = JSON.parse(fileContent);
+          const importData = await crypto.decrypt(JSON.parse(fileContent));
           // Validar datos importados
           if (importData.modelName !== this.model.name) {
             throw new Error('El archivo no corresponde a este modelo de base de datos');
           }
 
-          // Limpiar datos existentes
+          // Limpiar datos existentes (opcional, configurable)
           const clearExisting = await this._confirmClearExistingData();
           if (clearExisting) {
             const existingRecords = await this.model.find();
@@ -149,7 +153,7 @@ class FileSystemManager {
             }
           }
 
-          // Importar nuevos registros
+          // Import new records
           const importedRecords = [];
           for (const record of importData.data) {
             const imported = await this.model.create(record, { castToScheme: true });
@@ -184,7 +188,7 @@ class FileSystemManager {
         return await this._fallbackImport();
       }
 
-      // Abrir diálogo de selección de archivo
+      // Open file picker dialog if supported
       const [fileHandle] = await window.showOpenFilePicker({
         types: [{
           description: 'Iris Database Backup',
@@ -195,9 +199,10 @@ class FileSystemManager {
 
       const file = await fileHandle.getFile();
       const fileContent = await file.text();
-      const importData = JSON.parse(fileContent);
+      const importData = await crypto.decrypt(JSON.parse(fileContent));
+      //const importData = JSON.parse(fileContent);
 
-      // Validar datos importados
+      // Validate imported data
       if (importData.modelName !== this.model.name) {
         throw new Error('El archivo no corresponde a este modelo de base de datos');
       }

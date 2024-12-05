@@ -179,17 +179,6 @@ class IrisUtils {
       .padStart(6, "0"); // Contador aleatorio
     return timestamp + randomBytes + counter;
   }
-
-  static Stringify(obj, schema, replacer = null, space = 2) {
-    return JSON.stringify(obj, (key, value) => {
-      console.log('Stringify', schema.definition[key]?.type === Date);
-      if (schema.definition[key]?.type === Date) {
-        alert('Date', value);
-        // Usar Date.prototype.toString para formatear como "Wed Dec 04 2024 15:35:27 GMT-0300"
-        return value.toString();
-      }
-      return value;
-    }, space);
-  }
+  
 }
 export { IrisUtils };

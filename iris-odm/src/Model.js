@@ -35,8 +35,7 @@ class Model {
         if (!db.objectStoreNames.contains(this.name)) {
           const store = db.createObjectStore(this.name, {
             keyPath: this.primary,
-          });
-
+          });          
           // Crear índices definidos en el esquema
           this.schema.indexes.forEach((index) => {
             store.createIndex(index.field, index.field, {
@@ -71,7 +70,7 @@ class Model {
   }
 
   async findById(id) {
-    return this._executeTransaction("readonly", (store) => {
+    return this._executeTransaction("readonly", (store) => { 
       return new Promise((resolve, reject) => {
         const request = store.get(id);
         request.onsuccess = () => resolve(request.result);
@@ -123,8 +122,10 @@ class Model {
   async limit({ fields, limit }) {
     return fields.slice(0, limit);
   }
-  async update(id, data) {
-    await this._validateData(data, "update");
+  async update(data, id) {
+    id = id || data[this.primary];
+    delete data[this.primary];
+    await this._validateData(data, "update", id);
     return this._executeTransaction("readwrite", (store) => {
       return new Promise((resolve, reject) => {
         // Mostrar el keyPath configurado para el store
@@ -273,7 +274,7 @@ class Model {
     return "s";
   }
 
-  async _validateData(data, operation = "create") {
+  async _validateData(data, operation = "create", id) {
     // Asignar clave primaria si no existe
     if (
       operation === "create" &&
@@ -281,8 +282,8 @@ class Model {
     ) {
       data[this.primary] = await IrisUtils.generateObjectId();
     } else if (
-      operation === "update" &&
-      (await this.validatePrimaryKey(data)) === "e"
+      operation === "update" && !id /* &&
+      (await this.validatePrimaryKey(data)) === "e" */
     ) {
       throw new Error(
         `Primary key '${this.primary}' is required for update operation`
@@ -426,6 +427,13 @@ class Model {
         });
       }
       return item[key] === value;
+    });
+  }
+
+  // List databases in the current instance. Return an array of objects with name and version properties
+  async databases() {
+    return indexedDB.databases().then((dbs) => {
+      return dbs.map((db) => ({ name: db.name, version: db.version }));
     });
   }
 }

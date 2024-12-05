@@ -3,7 +3,7 @@
  */
 
 // Importar el módulo Schema para probarlo
-import { Schema } from '../src/Schema.js';
+import { Schema } from '../src/iris.js';
 
 // Función auxiliar para mostrar resultados de los tests
 function logResult(testName, result) {

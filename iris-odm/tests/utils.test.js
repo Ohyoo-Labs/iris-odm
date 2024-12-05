@@ -2,9 +2,7 @@
  * @file Unit tests for the IrisUtils module.
  */
 
-import { IrisUtils } from '../src/IrisUtils.js';
-import { Schema } from '../src/Schema.js';
-import { Model } from '../src/Model.js';
+import { IrisUtils, Schema, Model } from '../src/iris.js';
 
 // Mock para IndexedDB
 /* window.indexedDB = {

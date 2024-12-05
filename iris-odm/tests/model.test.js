@@ -3,8 +3,7 @@
  */
 
 // Importar el módulo Model y Schema para probar
-import { Model } from '../src/Model.js';
-import { Schema } from '../src/Schema.js';
+import { Model, Schema } from '../src/iris.js';
 
 // Definición del esquema para pruebas
 const userSchema = new Schema({
@@ -54,10 +53,9 @@ async function testFindById() {
     try {
         await model.connect();
         const createResult = await model.create(data);
-        id = createResult.id;
-
+        id = createResult._id;        
         const findResult = await model.findById(id);
-        const isValid = findResult && findResult.id === id;
+        const isValid = findResult && findResult._id === id;
         logResult('testFindById', { success: isValid });
     } catch (error) {
         logResult('testFindById', { success: false, error: error.message });
@@ -77,7 +75,6 @@ async function testFind() {
         await Promise.all(data.map(user => model.create(user)));
 
         const findResult = await model.find({ age: 30 });
-        console.log(findResult);
         const isValid = findResult.length >= 1 && findResult[0].name === 'John Doe';
         logResult('testFind', { success: isValid });
     } catch (error) {
@@ -94,10 +91,10 @@ async function testUpdate() {
     try {
         await model.connect();
         const createResult = await model.create(data);
-        id = createResult.id;
+        id = createResult._id;
 
         const updatedData = { name: 'Johnathan Doe', age: 31 };
-        const updateResult = await model.update(id, updatedData);
+        const updateResult = await model.update(updatedData, id);
 
         const isValid = updateResult.name === updatedData.name && updateResult.age === updatedData.age;
         logResult('testUpdate', { success: isValid });
@@ -115,7 +112,7 @@ async function testDelete() {
     try {
         await model.connect();
         const createResult = await model.create(data);
-        id = createResult.id;
+        id = createResult._id;
 
         const deleteResult = await model.delete(id);
         const findResult = await model.findById(id);

@@ -3,14 +3,11 @@
  */
 
 // Importar clases necesarias
-import { FileSystemManager } from '../src/FileSystem.js';
-import { Schema } from '../src/Schema.js';
-import { Model } from '../src/Model.js'; // Suponiendo que ya existe el modelo IrisModel para simular operaciones
-
+import { FileSystemManager, Schema, Model } from "../src/iris.js";
 // Mock de datos
 const mockData = [
-  {  name: 'Test 1', createdAt: new Date() },
-  {  name: 'Test 2', createdAt: new Date() }
+  {  name: 'Test 421', createdAt: new Date() },
+  {  name: 'Test 522', createdAt: new Date() }
 ];
 const mockSchema = new Schema({
   _id: { type: String, unique: true },
@@ -22,7 +19,7 @@ const mockModel = new Model('testModel', mockSchema);
 // Test suite
 (async () => {
   console.log('Iniciando tests para FileSystemManager...');
-  
+  console.log('List Databases:', await mockModel.databases());
   // Insertar datos simulados
   for (const record of mockData) {
     await mockModel.create(record);
@@ -37,7 +34,7 @@ const mockModel = new Model('testModel', mockSchema);
   console.log('✔️ Verificación de compatibilidad completada');
 
   // Test 2: Exportación con fallback
-  const fallbackExportResult = fsManager._fallbackExport(mockData);
+  const fallbackExportResult = await fsManager._fallbackExport(mockData);
   console.log('Exportación con fallback:', fallbackExportResult);
   console.assert(fallbackExportResult.success, 'La exportación con fallback falló');
   console.log('✔️ Exportación con fallback completada');

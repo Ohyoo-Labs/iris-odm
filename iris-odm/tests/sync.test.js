@@ -3,9 +3,7 @@
  */
 
 // Importar las clases necesarias
-import { SyncManager } from '../src/Sync.js';
-import { Model } from '../src/Model.js';
-import { Schema } from '../src/Schema.js';
+import { SyncManager, Model, Schema } from '../src/iris.js';
 
 // Simular una API local para los tests
 const mockServer = (() => {

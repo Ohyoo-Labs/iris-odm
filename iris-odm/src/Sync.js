@@ -141,11 +141,11 @@ class SyncManager {
 
       // Update local items with server confirmation
       for (const synced of result.synchronized) {
-        await this.model.update(synced.localId, {
+        await this.model.update({
           [this.syncStatusField]: "synced",
           [this.serverIdField]: synced.serverId,
           [this.lastSyncField]: new Date(),
-        });
+        }, synced.localId);
       }
 
       return {
@@ -187,27 +187,27 @@ class SyncManager {
   async handleConflict(localItem, serverItem) {
     const updated = await localItem.map(async (item) => {
       if (this.conflictResolution === "server-wins") {
-        return await this.model.update(item[this.idField], {
+        return await this.model.update({
           ...serverItem,
           [this.serverIdField]: serverItem[this.idField],
           [this.syncStatusField]: "synced",
           [this.lastSyncField]: new Date(),
-        });
+        }, item[this.idField]);
       } else if (this.conflictResolution === "client-wins") {
         if (localItem[this.syncStatusField] !== "modified") {
-          return await this.model.update(localItem[this.idField], {
+          return await this.model.update({
             ...serverItem,
             [this.serverIdField]: serverItem[this.idField],
             [this.syncStatusField]: "synced",
             [this.lastSyncField]: new Date(),
-          });
+          }, item[this.idField]);
         }
       } else if (this.conflictResolution === "manual") {
-        return await this.model.update(localItem[this.idField], {
+        return await this.model.update({
           ...localItem,
           [this.syncStatusField]: "conflict",
           _serverVersion: serverItem,
-        });
+        }, item[this.idField]);
       }
     });
     return updated;
@@ -261,13 +261,13 @@ class SyncManager {
     const originalCreate = this.model.create.bind(this.model);
 
     // Override update method
-    this.model.update = async (id, data) => {
+    this.model.update = async (data, id) => {
       const syncData = {
         ...data,
         [this.syncStatusField]: "modified",
         _localUpdatedAt: new Date(),
       };
-      return originalUpdate(id, syncData);
+      return originalUpdate(syncData, id);
     };
 
     // Override create method
