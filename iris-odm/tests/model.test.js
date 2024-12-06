@@ -144,6 +144,106 @@ async function testDeleteMany() {
     }
 }
 
+async function testConnect2() {
+    const dbName = 'testDB';
+    const dbVersion = 1;    
+    const model = new Model(dbName, userSchema, {version: dbVersion, collections: ['collection1', 'collection2']} );
+  
+    model.connect().then((db) => {
+      // Verifica que la base de datos se haya conectado
+      console.assert(db.name === dbName, `La base de datos debería llamarse ${dbName}`);
+  
+      // Verifica que la colección principal sea 'testDB' (si no se especifica, el nombre de la DB debería usarse)     
+  
+      // Verifica que las colecciones adicionales 'collection1' y 'collection2' hayan sido creadas
+      console.assert(db.objectStoreNames.contains('collection1'), 'La colección collection1 debería haber sido creada');
+      console.assert(db.objectStoreNames.contains('collection2'), 'La colección collection2 debería haber sido creada');
+    }).catch((error) => {
+      console.error('Error en testConnect:', error);
+    });
+  }
+  
+  async function testAddCollections() {
+    const dbName = 'testDB';
+    const dbVersion = 1;
+    const model = new Model( dbName, userSchema, { version: dbVersion, collections: ['collection1'] });
+  
+    model.connect().then(() => {
+      // Agregar nuevas colecciones después de la conexión
+      model.addCollections(['collection2', 'collection3']).then((result) => {
+        console.log(result);
+        // Verifica que las nuevas colecciones hayan sido creadas
+        const db = model.db;
+  
+        console.assert(db.objectStoreNames.contains('collection2'), 'La colección collection2 debería haber sido creada');
+        console.assert(db.objectStoreNames.contains('collection3'), 'La colección collection3 debería haber sido creada');
+        // Verifica que 'this.collections' ahora contenga 'collection1', 'collection2' y 'collection3'
+        console.assert(model.collections.length === 3, 'El tamaño de this.collections debería ser 3');
+        console.assert(model.collections.includes('collection2'), 'this.collections debería incluir collection2');
+        console.assert(model.collections.includes('collection3'), 'this.collections debería incluir collection3');
+      }).catch((error) => {
+        console.error('Error en testAddCollections:', error);
+      });
+    }).catch((error) => {
+      console.error('Error en testConnect para testAddCollections:', error);
+    });
+  }  
+
+  async function testNoDuplicateCollections() {
+    const dbName = 'testDB';
+    const dbVersion = 1;
+    const model = new Model(dbName, userSchema, { version: dbVersion, collections: ['collection1', 'collection2'] });
+  
+    model.connect().then(() => {
+      model.addCollections(['collection2', 'collection3']).then(() => {
+        const db = model.db;
+  
+        // Verifica que 'collection2' no se haya duplicado
+        console.assert(model.collections.filter((col) => col === 'collection2').length === 1, 'collection2 no debe estar duplicada');
+  
+        // Verifica que 'collection3' fue añadida correctamente
+        console.assert(model.collections.includes('collection3'), 'this.collections debería incluir collection3');
+  
+        console.log('testNoDuplicateCollections pasó correctamente');
+      }).catch((error) => {
+        console.error('Error en testNoDuplicateCollections:', error);
+      });
+    }).catch((error) => {
+      console.error('Error en testConnect para testNoDuplicateCollections:', error);
+    });
+  } 
+  
+  async function testConnectWithoutAdditionalCollections() {
+    const dbName = 'testDB1';
+    const dbVersion = 1;
+    const model = new Model(dbName, userSchema, { version: dbVersion, collections: [] });
+  
+    model.connect().then((db) => {
+      // Verifica que la base de datos se haya conectado
+      console.assert(db.name === dbName, `La base de datos debería llamarse ${dbName}`);
+  
+      // Verifica que la colección principal sea el nombre de la DB
+      console.log(db.objectStoreNames.contains(dbName));
+      console.assert(db.objectStoreNames.contains(dbName), `La base de datos debería tener la colección principal ${dbName}`);
+      console.log('testConnectWithoutAdditionalCollections pasó correctamente');
+    }).catch((error) => {
+      console.error('Error en testConnectWithoutAdditionalCollections:', error);
+    });
+  } 
+  
+  async function testMainCollectionName() {
+    const dbName = 'testDB1';
+    const model = new Model(dbName, userSchema, { collections: [] });
+  
+    model.connect().then((db) => {
+      // Verifica que la colección principal tenga el nombre correcto
+      console.assert(db.objectStoreNames.contains(dbName), `La base de datos debería tener la colección principal ${dbName}`);
+      console.log('testMainCollectionName pasó correctamente');
+    }).catch((error) => {
+      console.error('Error en testMainCollectionName:', error);
+    });
+  }  
+
 // Ejecutar todos los tests
 async function runTests() {
     await testConnect();
@@ -153,6 +253,11 @@ async function runTests() {
     await testUpdate();
     await testDelete();
     await testDeleteMany();
+    await testConnect2();
+    await testAddCollections();
+    await testNoDuplicateCollections();
+    await testConnectWithoutAdditionalCollections();
+    await testMainCollectionName();
 }
 
 // Ejecutar los tests

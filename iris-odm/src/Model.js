@@ -4,9 +4,14 @@ class Model {
   constructor(name, schema, options = {}) {
     this.name = name;
     this.schema = schema;
-    this.version = options.version || 1;
+    this.version = options.version || 1; // Versión de la base de datos
     this.primary = options.primary || "_id"; // Campo índice principal
-    if (!this.schema.definition[this.primary]) {
+    this.collections =
+      Array.isArray(options?.collections) && options?.collections.length > 0
+        ? options.collections
+        : []; // Permitir colecciones adicionales y dar soporte a múltiples stores
+
+    if (!this.schema.definition[`${this.primary}`]) {
       this.schema.definition[this.primary] = { type: String, unique: true };
     } else if (this.schema.definition[this.primary].type !== String) {
       console.warn(
@@ -16,32 +21,49 @@ class Model {
     } else if (!this.schema.definition[this.primary]?.unique) {
       this.schema.definition[this.primary].unique = true;
     }
+    this.activeCollection = options?.active || this.name;
     this.db = null;
   }
-
   async connect() {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
+      this.version = await this.syncVersion(this.version);
       const request = indexedDB.open(this.name, this.version);
-
       request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
+      request.onsuccess = async () => {
         this.db = request.result;
+        this.collections = Array.from(this.db.objectStoreNames);        
         resolve(this.db);
       };
-
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
-
-        if (!db.objectStoreNames.contains(this.name)) {
-          const store = db.createObjectStore(this.name, {
-            keyPath: this.primary,
-          });          
-          // Crear índices definidos en el esquema
-          this.schema.indexes.forEach((index) => {
-            store.createIndex(index.field, index.field, {
-              unique: index.unique || false,
-            });
+        // Si collections no está vacío, crear las object stores correspondientes
+        if (this.collections.length > 0) {
+          this.collections.forEach((collectionName) => {
+            if (!db.objectStoreNames.contains(collectionName)) {
+              const store = db.createObjectStore(collectionName, {
+                keyPath: this.primary,
+              });
+              // Crear índices definidos en el esquema
+              this.schema.indexes.forEach((index) => {
+                store.createIndex(index.field, index.field, {
+                  unique: index.unique || false,
+                });
+              });
+            }
           });
+        } else {
+          // Si collections está vacío, usar this.name para la colección principal
+          if (!db.objectStoreNames.contains(this.name)) {
+            const store = db.createObjectStore(this.name, {
+              keyPath: this.primary,
+            });
+            // Crear índices definidos en el esquema
+            this.schema.indexes.forEach((index) => {
+              store.createIndex(index.field, index.field, {
+                unique: index.unique || false,
+              });
+            });
+          }
         }
       };
     });
@@ -54,7 +76,113 @@ class Model {
     }
   }
 
-    async create(data, options = {}) {
+  async syncVersion(version) {
+    return this.dbExists(this.name)
+      .then((exists) => {
+        if (exists) {
+          if (version && version < exists.version) {
+            return (this.version = exists.version);
+          }
+          return (this.version = version);
+        } else {
+          return (this.version = 1);
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+        return (this.version = 1);
+      });
+  }
+  async dbExists(name) {
+    return indexedDB
+      .databases()
+      .then((dbs) => dbs.find((db) => db.name === name));
+  }
+  
+  async addCollections(collections) {
+    if (!this.db) await this.connect();
+    return new Promise((resolve, reject) => {
+      const existingCollections = Array.from(this.db.objectStoreNames);
+
+      // Filtrar las colecciones que ya existen
+      if (typeof collections === "string") {
+        collections = [collections];
+      }
+      const newCollections = collections.filter(
+        (name) => !existingCollections.includes(name)
+      );
+
+      if (newCollections.length === 0) {
+        /* return reject(
+          new Error("Todas las colecciones ya existen en la base de datos.")
+        ); */
+        return resolve({
+          success: false,
+          message: "Todas las colecciones ya existen en la base de datos.",
+          addedCollections: [],
+          allCollections: existingCollections,
+        });
+      }
+
+      const dbName = this.db.name;
+      this.version++;
+
+      // Cerrar la conexión actual para permitir la actualización
+      this.db.close();
+      const request = indexedDB.open(dbName, this.version);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        this.db = request.result;
+
+        // Resolver con detalles útiles
+        resolve({
+          success: true,
+          addedCollections: newCollections,
+          allCollections: Array.from(this.db.objectStoreNames),
+        });
+      };
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+
+        // Crear las colecciones que faltan
+        newCollections.forEach((name) => {
+          const store = db.createObjectStore(name, { keyPath: this.primary });
+
+          // Crear índices definidos en el esquema, si aplica
+          this.schema.indexes.forEach((index) => {
+            store.createIndex(index.field, index.field, {
+              unique: index.unique || false,
+            });
+          });
+        });
+      };
+      // Actualizar las colecciones existentes
+      this.collections = [...existingCollections, ...newCollections];
+    });
+  }
+
+  async switchCollection(collectionName) {
+    try {
+      if (this.collections.includes(collectionName)) {
+        this.activeCollection = collectionName;        
+      } else {
+        throw new Error(`Collection '${collectionName}' not found`);
+      }
+      return this.activeCollection;
+    } catch (error) {
+      console.error(error);
+      return null;
+    }
+  }
+
+  // Refresh the database connection for showing the updated collections
+  async refresh() {
+    await this.disconnect();
+    return await this.connect();
+  }
+
+  async create(data, options = {}) {
     if (options.castToScheme) {
       data = this._prepare(data);
     }
@@ -62,7 +190,9 @@ class Model {
 
     return this._executeTransaction("readwrite", (store) => {
       return new Promise((resolve, reject) => {
-        const request = store.add(!options?.castToScheme ? this._prepare(data) : data);
+        const request = store.add(
+          !options?.castToScheme ? this._prepare(data) : data
+        );
         request.onsuccess = () => resolve(data); // Retornar el objeto original con _id
         request.onerror = () => reject(request.error);
       });
@@ -70,7 +200,7 @@ class Model {
   }
 
   async findById(id) {
-    return this._executeTransaction("readonly", (store) => { 
+    return this._executeTransaction("readonly", (store) => {
       return new Promise((resolve, reject) => {
         const request = store.get(id);
         request.onsuccess = () => resolve(request.result);
@@ -282,7 +412,8 @@ class Model {
     ) {
       data[this.primary] = await IrisUtils.generateObjectId();
     } else if (
-      operation === "update" && !id /* &&
+      operation === "update" &&
+      !id /* &&
       (await this.validatePrimaryKey(data)) === "e" */
     ) {
       throw new Error(
@@ -339,8 +470,8 @@ class Model {
     }
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction(this.name, mode);
-      const store = transaction.objectStore(this.name);
+      const transaction = this.db.transaction(this.activeCollection, mode);
+      const store = transaction.objectStore(this.activeCollection);
 
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
@@ -353,7 +484,10 @@ class Model {
     const prepared = {};
     for (const [key, value] of Object.entries(data)) {
       if (this.schema.definition[key]) {
-        prepared[key] = this._castValue(value, this.schema.definition[key]?.type);
+        prepared[key] = this._castValue(
+          value,
+          this.schema.definition[key]?.type
+        );
       }
     }
     return prepared;
@@ -434,6 +568,64 @@ class Model {
   async databases() {
     return indexedDB.databases().then((dbs) => {
       return dbs.map((db) => ({ name: db.name, version: db.version }));
+    });
+  }
+
+  async analyzeDB(dbName) {
+    return new Promise((resolve, reject) => {
+      try {
+        const request = indexedDB.open(dbName);
+
+        request.onsuccess = (event) => {
+          const db = event.target.result;
+          const dbInfo = {
+            name: db.name,
+            version: db.version,
+            objectStores: [],
+          };
+
+          const objectStoreNames = db.objectStoreNames;
+
+          for (let i = 0; i < objectStoreNames.length; i++) {
+            const storeName = objectStoreNames[i];
+            const transaction = db.transaction(storeName, "readonly");
+            const store = transaction.objectStore(storeName);
+
+            const objectStore = {
+              name: storeName,
+              indexes: [],
+            };
+
+            // Inspeccionar índices
+            const indexNames = store.indexNames;
+            for (let j = 0; j < indexNames.length; j++) {
+              const index = store.index(indexNames[j]);
+              objectStore.indexes.push({
+                name: index.name,
+                keyPath: index.keyPath,
+                unique: index.unique,
+              });
+            }
+
+            dbInfo.objectStores.push(objectStore);
+          }
+
+          db.close(); // Cerrar la conexión a la base de datos
+          resolve(dbInfo); // Devolver la información recopilada
+        };
+
+        request.onerror = (event) => {
+          reject(
+            new Error(
+              `No se pudo abrir la base de datos: ${event.target.error}`
+            )
+          );
+        };
+      } catch (error) {
+        reject(
+          new Error(`Error al analizar la base de datos: ${error.message}`)
+        );
+      }
     });
   }
 }
