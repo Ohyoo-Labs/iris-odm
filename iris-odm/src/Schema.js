@@ -1,4 +1,6 @@
-// IndexedDB ORM Library
+/**
+ * @file Schema class for defining the structure of a document
+ */
 
 class Schema {
   constructor(definition) {
@@ -25,6 +27,7 @@ class Schema {
         throw new Error(`Invalid type for field ${field}. Expected ${type}, got ${typeof value}`);
       }
     }
+    return true;
   }
   // Método asíncrono para validar un objeto
   async validateAsync(data) {
@@ -36,6 +39,7 @@ class Schema {
         throw new Error(`Invalid type for field ${field}. Expected ${type}, got ${typeof value}`);
       }
     }
+    return true;
   }
   // Método estático para crear un esquema a partir de un objeto
   static fromObject(definition) {
