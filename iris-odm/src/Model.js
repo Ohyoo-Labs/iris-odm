@@ -31,7 +31,7 @@ class Model {
       request.onerror = () => reject(request.error);
       request.onsuccess = async () => {
         this.db = request.result;
-        this.collections = Array.from(this.db.objectStoreNames);        
+        this.collections = Array.from(this.db.objectStoreNames);
         resolve(this.db);
       };
       request.onupgradeneeded = (event) => {
@@ -98,7 +98,7 @@ class Model {
       .databases()
       .then((dbs) => dbs.find((db) => db.name === name));
   }
-  
+
   async addCollections(collections) {
     if (!this.db) await this.connect();
     return new Promise((resolve, reject) => {
@@ -165,7 +165,7 @@ class Model {
   async switchCollection(collectionName) {
     try {
       if (this.collections.includes(collectionName)) {
-        this.activeCollection = collectionName;        
+        this.activeCollection = collectionName;
       } else {
         throw new Error(`Collection '${collectionName}' not found`);
       }
@@ -209,7 +209,7 @@ class Model {
     });
   }
 
-  async find(query = {}) {
+  async find(query = null) {
     return this._executeTransaction("readonly", (store) => {
       return new Promise((resolve, reject) => {
         const results = [];
@@ -218,8 +218,13 @@ class Model {
         request.onsuccess = (event) => {
           const cursor = event.target.result;
           if (cursor) {
-            if (this._matchesQuery(cursor.value, query)) {
-              results.push(cursor.value);
+            // Si no se proporciona una consulta, devolver todos los elementos
+            // Si se proporciona una consulta, filtrar los elementos
+            if (!query) results.push(cursor.value);
+            else {
+              if (this._matchesQuery(cursor.value, query)) {
+                results.push(cursor.value);
+              }
             }
             cursor.continue();
           } else {
