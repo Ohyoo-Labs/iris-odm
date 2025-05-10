@@ -98,7 +98,11 @@ class Model {
       .databases()
       .then((dbs) => dbs.find((db) => db.name === name));
   }
-
+  static async existsDB(name) {
+    return indexedDB.databases().then((dbs) =>
+      dbs.find((db) => db.name === name)
+    );
+  }
   async addCollections(collections) {
     if (!this.db) await this.connect();
     return new Promise((resolve, reject) => {
