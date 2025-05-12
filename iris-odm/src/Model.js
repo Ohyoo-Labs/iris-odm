@@ -99,9 +99,9 @@ class Model {
       .then((dbs) => dbs.find((db) => db.name === name));
   }
   static async existsDB(name) {
-    return indexedDB.databases().then((dbs) =>
-      dbs.find((db) => db.name === name)
-    );
+    return indexedDB
+      .databases()
+      .then((dbs) => dbs.find((db) => db.name === name));
   }
   async addCollections(collections) {
     if (!this.db) await this.connect();
@@ -203,7 +203,7 @@ class Model {
     });
   }
 
-  async findById(id) {
+  /* async findById(id) {
     return this._executeTransaction("readonly", (store) => {
       return new Promise((resolve, reject) => {
         const request = store.get(id);
@@ -211,9 +211,31 @@ class Model {
         request.onerror = () => reject(request.error);
       });
     });
+  } */
+  async findById(id, fields = null) {
+    return this._executeTransaction("readonly", (store) => {
+      return new Promise((resolve, reject) => {
+        const request = store.get(id);
+        request.onsuccess = () => {
+          if (!request.result || !fields) {
+            resolve(request.result);
+          } else {
+            const selectedFields = {};
+            for (let i = 0; i < fields.length; i++) {
+              const field = fields[i];
+              if (request.result.hasOwnProperty(field)) {
+                selectedFields[field] = request.result[field];
+              }
+            }
+            resolve(selectedFields);
+          }
+        };
+        request.onerror = () => reject(request.error);
+      });
+    });
   }
 
-  async find(query = null) {
+  /* async find(query = null) {
     return this._executeTransaction("readonly", (store) => {
       return new Promise((resolve, reject) => {
         const results = [];
@@ -228,6 +250,44 @@ class Model {
             else {
               if (this._matchesQuery(cursor.value, query)) {
                 results.push(cursor.value);
+              }
+            }
+            cursor.continue();
+          } else {
+            resolve(results);
+          }
+        };
+
+        request.onerror = () => reject(request.error);
+      });
+    });
+  } */
+  async find(query = null, fields = null) {
+    return this._executeTransaction("readonly", (store) => {
+      return new Promise((resolve, reject) => {
+        const results = [];
+        const request = store.openCursor();
+
+        request.onsuccess = (event) => {
+          const cursor = event.target.result;
+          if (cursor) {
+            let valueToPush = cursor.value;
+
+            if (fields) {
+              const selectedFields = {};
+              for (let i = 0; i < fields.length; i++) {
+                const field = fields[i];
+                if (cursor.value.hasOwnProperty(field)) {
+                  selectedFields[field] = cursor.value[field];
+                }
+              }
+              valueToPush = selectedFields;
+            }
+
+            if (!query) results.push(valueToPush);
+            else {
+              if (this._matchesQuery(cursor.value, query)) {
+                results.push(valueToPush);
               }
             }
             cursor.continue();
@@ -289,11 +349,12 @@ class Model {
     });
   }
 
+  // Método para eliminar un elemento por su ID y devolver el id eliminado
   async delete(id) {
     return this._executeTransaction("readwrite", (store) => {
       return new Promise((resolve, reject) => {
         const request = store.delete(id);
-        request.onsuccess = () => resolve(true);
+        request.onsuccess = () => resolve(id);
         request.onerror = () => reject(request.error);
       });
     });
