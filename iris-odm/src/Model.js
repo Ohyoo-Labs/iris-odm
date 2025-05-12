@@ -262,7 +262,7 @@ class Model {
       });
     });
   } */
-  async find(query = null, fields = null) {
+  async find({query = null, fields = null} = {}) {
     return this._executeTransaction("readonly", (store) => {
       return new Promise((resolve, reject) => {
         const results = [];
