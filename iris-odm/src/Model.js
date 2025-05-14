@@ -497,7 +497,7 @@ class Model {
         errors.push(`Field '${field}' is required`);
       }
       if (definition.unique && operation !== "update") {
-        const existing = await this.find({ [field]: data[field] });
+        const existing = await this.find({ query:{[field]: data[field]} });
         if (existing.length > 0) {
           errors.push(`Field '${field}' must be unique`);
         }
